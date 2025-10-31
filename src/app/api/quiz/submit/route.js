@@ -1,34 +1,31 @@
 import { supabaseAdmin } from "@/lib/supabase-admin";
 
-export default async function handler(req, res) {
-  if (req.method !== "POST") {
-    res.setHeader("Allow", ["POST"]);
-    return res.status(405).end(`Method ${req.method} Not Allowed`);
-  }
-
+export async function POST(req) {
   try {
-    const { quizId, answers } = req.body || {};
+    const { quizId, answers } = await req.json();
 
-    // Basic validation
     if (!quizId || !answers || typeof answers !== "object") {
-      return res.status(400).json({ message: "Invalid payload: quizId and answers are required." });
+      return Response.json(
+        { message: "Invalid payload: quizId and answers are required." },
+        { status: 400 }
+      );
     }
 
-    // Optional: try to resolve a user from an Authorization header (Bearer <token>)
+    // Try to resolve user from Authorization header (Bearer <token>)
     let userId = null;
     try {
-      const authHeader = req.headers.authorization || "";
+      const authHeader = req.headers.get("authorization") || "";
       const token = authHeader.startsWith("Bearer ") ? authHeader.split(" ")[1] : null;
+
       if (token) {
         const { data: userData, error: userErr } = await supabaseAdmin.auth.getUser(token);
         if (!userErr && userData?.user) userId = userData.user.id;
       }
     } catch (e) {
-      // Non-fatal: authentication failed, continue as anonymous
-      console.warn("Auth check failed for submission (continuing as anonymous)", e?.message || e);
+      console.warn("Auth check failed (continuing as anonymous)", e?.message);
     }
 
-    // Fetch canonical questions and correct answers from the DB using the admin client
+    // Load questions
     const { data: questionsData, error: qErr } = await supabaseAdmin
       .from("Question")
       .select("id, type, options:AnswerOption(id, text, is_correct, created_at)")
@@ -37,12 +34,12 @@ export default async function handler(req, res) {
       .order("created_at", { ascending: true });
 
     if (qErr) {
-      console.error("Failed to load questions for grading:", qErr.message || qErr);
-      return res.status(500).json({ message: "Failed to load quiz for grading." });
+      console.error("Failed to load questions:", qErr.message);
+      return Response.json({ message: "Failed to load quiz." }, { status: 500 });
     }
 
     if (!questionsData || questionsData.length === 0) {
-      return res.status(404).json({ message: "Quiz not found or has no questions." });
+      return Response.json({ message: "Quiz not found or has no questions." }, { status: 404 });
     }
 
     // Score computation
@@ -59,15 +56,10 @@ export default async function handler(req, res) {
       }));
       const submitted = answers[qid];
 
-      // Default: incorrect
       detail[qid] = { correct: false };
 
       if (qtype === "single_choice" || qtype === "true_false") {
-        // Expect a numeric index from client (0-based) or an option id string
-        if (submitted === null || submitted === undefined) {
-          detail[qid].reason = "no answer";
-          continue;
-        }
+        if (submitted === null || submitted === undefined) continue;
 
         let chosenOption = null;
         if (typeof submitted === "number") {
@@ -79,51 +71,36 @@ export default async function handler(req, res) {
         if (chosenOption && chosenOption.is_correct) {
           score += 1;
           detail[qid].correct = true;
-        } else {
-          detail[qid].correct = false;
         }
       } else if (qtype === "text") {
-        // Expect a string answer; compare normalized values
-        if (!submitted || typeof submitted !== "string") {
-          detail[qid].reason = "no answer";
-          continue;
-        }
+        if (!submitted || typeof submitted !== "string") continue;
+
         const expected = (opts[0]?.text || "").trim().toLowerCase();
         const given = submitted.trim().toLowerCase();
+
         if (expected && given && expected === given) {
           score += 1;
           detail[qid].correct = true;
-        } else {
-          detail[qid].correct = false;
         }
       } else {
-        // Unknown type — skip
         detail[qid].reason = "unsupported question type";
       }
     }
 
     const total = questionsData.length;
 
-    // Optional: persist attempt (best-effort — ignore failures)
+    // Persist attempt (non-fatal)
     try {
-      await supabaseAdmin.from("QuizAttempt").insert({
-        quiz_id: quizId,
-        user_id: userId,
-        answers: answers,
-        score,
-        total,
-      });
+      await supabaseAdmin
+        .from("QuizAttempt")
+        .insert([{ quiz_id: quizId, user_id: userId, answers, score, total }]);
     } catch (persistErr) {
-      // don't fail the request if saving attempt fails (table may not exist)
-      console.warn(
-        "Failed to persist quiz attempt (non-fatal):",
-        persistErr?.message || persistErr
-      );
+      console.warn("Failed to persist attempt:", persistErr?.message);
     }
 
-    return res.status(200).json({ score, total, detail });
+    return Response.json({ score, total, detail }, { status: 200 });
   } catch (err) {
     console.error("Quiz submission error:", err);
-    return res.status(500).json({ message: "Internal Server Error" });
+    return Response.json({ message: "Internal Server Error" }, { status: 500 });
   }
 }

@@ -289,7 +289,6 @@ const QuizLayout = ({ children, title }: { children: React.ReactNode; title: str
 
 // Results View Component
 const ResultsView = ({
-  quiz,
   score,
   totalQuestions,
 }: {
