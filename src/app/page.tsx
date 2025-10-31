@@ -31,6 +31,7 @@ import { supabase } from "@/lib/supabase";
 interface Quiz {
   id: string;
   title: string;
+  description?: string;
   Question: { count: number }[];
   // We'll calculate the question count separately or estimate it
 }
@@ -40,7 +41,7 @@ async function getQuizzes(): Promise<Quiz[]> {
     // Fetch all quizzes and join with the question count
     const { data: quizzes, error } = await supabase
       .from("Quiz") // Replace with your actual table name
-      .select("id, title, Question(count)")
+      .select("id, title, description, Question(count)")
       .limit(3); // Limit the display for performance
 
     if (error) {
@@ -53,6 +54,7 @@ async function getQuizzes(): Promise<Quiz[]> {
     return quizzes.map((quiz: Quiz) => ({
       id: quiz.id,
       title: quiz.title,
+      description: quiz.description,
       count: quiz.Question.length > 0 ? quiz.Question[0].count : 0,
       Question: quiz.Question, // Keep it to satisfy type
     }));
@@ -137,7 +139,9 @@ const QuizCard = ({ quiz }: { quiz: Quiz }) => (
       <h3 className="text-xl font-semibold mb-2 text-indigo-600 dark:text-indigo-400">
         {quiz.title}
       </h3>
-      {/* <p className="text-gray-600 dark:text-gray-300 mb-4">{quiz.description}</p> */}
+      <p className="text-gray-600 dark:text-gray-300 mb-4 text-sm line-clamp-2">
+        {quiz?.description}
+      </p>
       <span className="inline-flex items-center text-sm font-medium text-gray-500 dark:text-gray-400">
         <svg className="w-4 h-4 mr-1 text-yellow-500" fill="currentColor" viewBox="0 0 20 20">
           {/* Star Icon (for visual interest) */}

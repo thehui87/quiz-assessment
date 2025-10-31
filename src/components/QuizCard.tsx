@@ -1,7 +1,7 @@
 import Link from "next/link";
 // Assume this component is in '@/components/quiz/QuizCard.tsx'
 interface QuizCardProps {
-  quiz: { id: string; title: string; description: string; count: number };
+  quiz: { id: string; title: string; description?: string; count: number };
 }
 
 export const QuizCard = ({ quiz }: QuizCardProps) => (
@@ -13,7 +13,9 @@ export const QuizCard = ({ quiz }: QuizCardProps) => (
       <h3 className="text-xl font-bold mb-2 text-gray-800 dark:text-white group-hover:text-indigo-600 dark:group-hover:text-indigo-400">
         {quiz.title}
       </h3>
-      <p className="text-gray-600 dark:text-gray-300 mb-4 text-sm">{quiz.description}</p>
+      <p className="text-gray-600 dark:text-gray-300 mb-4 text-sm line-clamp-2">
+        {quiz.description}
+      </p>
 
       <div className="flex items-center justify-between pt-2 border-t border-gray-100 dark:border-gray-700/50">
         <span className="text-sm font-medium text-gray-500 dark:text-gray-400">

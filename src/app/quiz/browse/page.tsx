@@ -9,6 +9,7 @@ import { supabase } from "@/lib/supabase"; // Your initialized Supabase client
 interface Quiz {
   id: string;
   title: string;
+  description?: string;
   Question: { count: number }[];
   // We'll calculate the question count separately or estimate it
 }
@@ -23,7 +24,7 @@ async function getQuizzes(): Promise<Quiz[]> {
     // Fetch all quizzes and join with the question count
     const { data: quizzes, error } = await supabase
       .from("Quiz") // Replace with your actual table name
-      .select("id, title, Question(count)")
+      .select("id, title, description, Question(count)")
       .limit(20); // Limit the display for performance
 
     if (error) {
@@ -36,6 +37,7 @@ async function getQuizzes(): Promise<Quiz[]> {
     return quizzes.map((quiz: Quiz) => ({
       id: quiz.id,
       title: quiz.title,
+      description: quiz.description,
       count: quiz.Question.length > 0 ? quiz.Question[0].count : 0,
       Question: quiz.Question, // Keep it to satisfy type
     }));
@@ -73,7 +75,7 @@ export default async function BrowseQuizzesPage() {
                 quiz={{
                   id: quiz.id,
                   title: quiz.title,
-                  description: "A comprehensive assessment of your skills.", // Placeholder desc
+                  description: quiz.description,
                   count: quiz.Question.length > 0 ? quiz.Question[0].count : 0,
                 }}
               />
