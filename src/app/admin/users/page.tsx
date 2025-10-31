@@ -2,9 +2,14 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
-import { User } from "@supabase/supabase-js";
 
-// Define a type for the user data we're fetching
+// --- Type definitions ---
+type AuthUser = {
+  id: string;
+  email: string | null;
+  last_sign_in_at: string | null;
+};
+
 type AdminUser = {
   id: string;
   is_admin: boolean;
@@ -24,9 +29,7 @@ export default function AdminUsersPage() {
       setLoading(true);
       setError(null);
 
-      // --- FIX START: Use two separate queries to bypass PostgREST foreign key error ---
-
-      // 1. Fetch all profiles (id and admin status)
+      // 1️⃣ Fetch profiles
       const { data: profilesData, error: profilesError } = await supabase
         .from("profiles")
         .select(`id, is_admin`);
@@ -44,31 +47,26 @@ export default function AdminUsersPage() {
         return;
       }
 
-      // Extract all profile IDs
-      const userIds = profilesData.map(p => p.id);
-
-      // 2. Fetch corresponding user details (email/sign-in) from the 'users' table/view.
-      // This assumes RLS is correctly configured to allow admins to view this data.
-      const { data: usersData, error: usersError } = await supabase
-        .from("users")
-        .select(`id, email, last_sign_in_at`)
-        .in("id", userIds);
-
-      if (usersError) {
-        console.error("Error fetching auth users:", usersError);
-        // We still show the profiles, but mark the user data as unavailable
+      // 2️⃣ Fetch auth users via secure API route
+      let authUsers: AuthUser[] = [];
+      try {
+        const res = await fetch("/api/admin/users");
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const json = await res.json();
+        authUsers = json.users as AuthUser[];
+      } catch (err) {
+        console.error("Error fetching auth users:", err);
         setError("Warning: Could not fetch user emails/status details.");
       }
 
-      // 3. Merge the data
-      const usersMap = new Map(usersData?.map(u => [u.id, u]) || []);
+      // 3️⃣ Merge data safely
+      const usersMap = new Map<string, AuthUser>(authUsers.map(u => [u.id, u]));
 
       const mappedUsers: AdminUser[] = profilesData.map(profile => {
         const authUser = usersMap.get(profile.id);
-
         return {
-          id: profile.id as string,
-          is_admin: profile.is_admin as boolean,
+          id: profile.id,
+          is_admin: profile.is_admin,
           users: authUser
             ? {
                 email: authUser.email,
@@ -79,8 +77,6 @@ export default function AdminUsersPage() {
       });
 
       setUsers(mappedUsers);
-      // --- FIX END ---
-
       setLoading(false);
     }
 
@@ -127,27 +123,17 @@ export default function AdminUsersPage() {
         User Management
       </h1>
 
-      {/* Responsive Table Wrapper */}
       <div className="overflow-x-auto">
         <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
           <thead className="bg-gray-50 dark:bg-gray-700">
             <tr>
-              <th
-                scope="col"
-                className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider"
-              >
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                 Email
               </th>
-              <th
-                scope="col"
-                className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider"
-              >
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                 Role
               </th>
-              <th
-                scope="col"
-                className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider"
-              >
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                 Status (Last Sign In)
               </th>
             </tr>
