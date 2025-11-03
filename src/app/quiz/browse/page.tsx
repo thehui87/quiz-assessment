@@ -24,7 +24,7 @@ async function getQuizzes(): Promise<Quiz[]> {
     // Fetch all quizzes and join with the question count
     const { data: quizzes, error } = await supabase
       .from("Quiz") // Replace with your actual table name
-      .select("id, title, description, Question(count)")
+      .select("id, title, description, Question(count)", { head: false })
       .limit(20); // Limit the display for performance
 
     if (error) {
